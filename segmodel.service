@@ -1,0 +1,14 @@
+[Unit]
+Description=segmodel — system-wide salient-object segmentation daemon
+After=graphical-session.target
+
+[Service]
+Type=simple
+# Assumes the repo lives at ~/programming/segmodel. Edit this path if not.
+ExecStart=%h/programming/segmodel/segmodel.sh
+Restart=on-failure
+RestartSec=2
+# Model stays warm on the GPU. POST /park to free it; /activate reloads.
+
+[Install]
+WantedBy=default.target
