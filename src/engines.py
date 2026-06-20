@@ -22,9 +22,14 @@ _IMAGENET_STD = np.array([0.229, 0.224, 0.225], np.float32)
 class BiRefNetOrt:
     backend = "cuda"
 
-    def __init__(self, model_path: str, size: int = 1024):
+    def __init__(self, model_path: str, size: int = 1024, providers=None, backend=None):
         self.model_path = model_path
         self.size = size
+        # Device placement: GPU (CUDA, falling back to CPU) by default, or CPU-only
+        # when the model-manager dock moves this model to RAM (backend="cpu").
+        self.providers = providers or ["CUDAExecutionProvider", "CPUExecutionProvider"]
+        if backend:
+            self.backend = backend
         self._sess = None
         self._lock = threading.Lock()
 
@@ -35,7 +40,7 @@ class BiRefNetOrt:
             import onnxruntime as ort
             self._sess = ort.InferenceSession(
                 self.model_path,
-                providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
+                providers=self.providers,
             )
             return True
 
@@ -110,8 +115,8 @@ class U2NetNcnn:
         mat_in.substract_mean_normalize(mean, norm)
         with self._lock:
             ex = self._net.create_extractor()
-            ex.input("input", mat_in)
-            _, out = ex.extract("output")
+            ex.input("in0", mat_in)           # pnnx-converted U2Net input blob
+            _, out = ex.extract("out0")        # d0 — the fused saliency map
         m = np.array(out)[0]
         m = (m - m.min()) / (m.max() - m.min() + 1e-8)
         alpha = cv2.resize((m * 255).astype(np.uint8), (W, H))
@@ -121,6 +126,10 @@ class U2NetNcnn:
 def make_engine(backend: str, model_path: str):
     if backend == "cuda":
         return BiRefNetOrt(model_path)
+    if backend == "cpu":
+        # CPU + system-RAM placement (model-manager "RAM" mode): same BiRefNet ONNX,
+        # CPU execution provider only.
+        return BiRefNetOrt(model_path, providers=["CPUExecutionProvider"], backend="cpu")
     if backend == "vulkan":
         return U2NetNcnn(model_path)
-    raise ValueError(f"unknown backend: {backend!r} (cuda|vulkan)")
+    raise ValueError(f"unknown backend: {backend!r} (cuda|cpu|vulkan)")

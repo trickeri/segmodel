@@ -4,8 +4,8 @@ After=graphical-session.target
 
 [Service]
 Type=simple
-# Assumes the repo lives at ~/programming/segmodel. Edit this path if not.
-ExecStart=%h/programming/segmodel/segmodel.sh
+# Assumes the repo lives at ~/programming/Models/segmodel. Edit this path if not.
+ExecStart=%h/programming/Models/segmodel/segmodel.sh
 Restart=on-failure
 RestartSec=2
 # Model stays warm on the GPU. POST /park to free it; /activate reloads.
