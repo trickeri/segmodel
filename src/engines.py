@@ -11,6 +11,7 @@ Both expose the same API the server uses:
     .backend  (class attr)
 """
 from __future__ import annotations
+import os
 import threading
 import numpy as np
 import cv2
@@ -38,8 +39,21 @@ class BiRefNetOrt:
             if self._sess is not None:
                 return True
             import onnxruntime as ort
+            so = ort.SessionOptions()
+            # On the CPU path (model-manager "RAM" placement) BiRefNet at 1024² makes
+            # ORT grow its CPU memory arena to the peak working set (~11 GB on a 214 MB
+            # model) and KEEP it — so idle RSS sits at 11 GB. Disabling the arena +
+            # mem-pattern makes ORT malloc/free per run, dropping idle RSS to roughly
+            # the weights; a run still spikes transiently but releases afterwards.
+            # Also bound intra-op threads (each carries its own scratch). Left at ORT
+            # defaults on CUDA so GPU throughput is unaffected.
+            if self.backend == "cpu":
+                so.enable_cpu_mem_arena = False
+                so.enable_mem_pattern = False
+                so.intra_op_num_threads = min(8, os.cpu_count() or 8)
             self._sess = ort.InferenceSession(
                 self.model_path,
+                sess_options=so,
                 providers=self.providers,
             )
             return True
